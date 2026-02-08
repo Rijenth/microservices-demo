@@ -45,3 +45,24 @@ module "alb" {
   security_group_id = module.security.alb_sg_id
   instance_id       = module.ec2.instance_id
 }
+
+# Modules securite
+
+module "iam" {
+  source = "./modules/iam"
+
+  project_name = var.project_name
+}
+
+module "waf" {
+  source = "./modules/waf"
+
+  project_name = var.project_name
+  alb_arn      = module.alb.alb_arn
+}
+
+module "secrets" {
+  source = "./modules/secrets"
+
+  project_name = var.project_name
+}
