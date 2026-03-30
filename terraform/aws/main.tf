@@ -32,8 +32,8 @@ module "rds" {
   subnet_id         = module.vpc.public_subnet_ids[1]
   security_group_id = module.security.rds_sg_id
   key_name          = var.key_name
-  db_username       = var.db_username
-  db_password       = var.db_password
+  db_username       = module.secrets.db_username
+  db_password       = module.secrets.db_password
 }
 
 module "alb" {
@@ -44,4 +44,27 @@ module "alb" {
   subnet_ids        = module.vpc.public_subnet_ids
   security_group_id = module.security.alb_sg_id
   instance_id       = module.ec2.instance_id
+}
+
+# Modules securite
+
+module "iam" {
+  source = "./modules/iam"
+
+  project_name        = var.project_name
+  redis_secret_arn    = module.secrets.redis_secret_arn
+  eks_oidc_issuer_url = var.eks_oidc_issuer_url
+}
+
+module "waf" {
+  source = "./modules/waf"
+
+  project_name = var.project_name
+  alb_arn      = module.alb.alb_arn
+}
+
+module "secrets" {
+  source = "./modules/secrets"
+
+  project_name = var.project_name
 }

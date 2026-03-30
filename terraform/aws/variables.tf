@@ -1,7 +1,7 @@
 variable "aws_region" {
   type        = string
   description = "AWS region to deploy resources"
-  default     = "eu-west-3"
+  default     = "eu-central-2"
 }
 
 variable "aws_access_key" {
@@ -25,30 +25,18 @@ variable "project_name" {
 variable "ami_id" {
   type        = string
   description = "AMI ID for the EC2 instance"
-  default     = "ami-04233b5aecce09244"
+  default     = "ami-095791d719c96cf1d"
 }
 
 variable "instance_type" {
   type        = string
   description = "EC2 instance type"
-  default     = "t2.micro"
+  default     = "t3.micro"
 }
 
 variable "key_name" {
   type        = string
   description = "Name of the SSH key pair for EC2 access"
-}
-
-variable "db_username" {
-  type        = string
-  description = "MySQL username for the database EC2 instance"
-  default     = "admin"
-}
-
-variable "db_password" {
-  type        = string
-  description = "MySQL password for the database EC2 instance"
-  sensitive   = true
 }
 
 variable "availability_zones" {
@@ -58,4 +46,22 @@ variable "availability_zones" {
     "eu-central-2a",
     "eu-central-2b"
   ]
+}
+
+variable "db_username" {
+  type        = string
+  description = "Database master username"
+  sensitive   = true
+}
+
+variable "db_password" {
+  type        = string
+  description = "Database master password"
+  sensitive   = true
+}
+
+variable "eks_oidc_issuer_url" {
+  type        = string
+  description = "OIDC issuer URL from EKS cluster (empty to skip IRSA setup)"
+  default     = ""
 }
