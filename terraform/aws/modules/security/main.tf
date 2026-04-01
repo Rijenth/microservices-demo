@@ -66,6 +66,38 @@ resource "aws_security_group" "ec2" {
   }
 }
 
+# Security group for Grafana
+resource "aws_security_group" "grafana" {
+  name        = "${var.project_name}-grafana-sg"
+  description = "Security group for Grafana"
+  vpc_id      = var.vpc_id
+
+  ingress {
+    description = "Grafana UI"
+    from_port   = 3000
+    to_port     = 3000
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "SSH from VPC only"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/16"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = { Name = "${var.project_name}-grafana-sg" }
+}
+
 # Security group for the database EC2 instance
 resource "aws_security_group" "rds" {
   name        = "${var.project_name}-db-sg"

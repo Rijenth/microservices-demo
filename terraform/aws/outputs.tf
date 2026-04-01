@@ -12,3 +12,13 @@ output "db_private_ip" {
   description = "Private IP of the database EC2 instance"
   value       = module.rds.private_ip
 }
+
+output "grafana_url" {
+  description = "Grafana URL (available ~2min after apply)"
+  value       = module.grafana.grafana_url
+}
+
+output "grafana_public_ip" {
+  description = "Public IP of the Grafana EC2 instance"
+  value       = module.grafana.public_ip
+}
