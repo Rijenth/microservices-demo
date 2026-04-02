@@ -19,6 +19,9 @@ resource "aws_instance" "db" {
   EOF
 
   tags = {
-    Name = "${var.project_name}-db"
+    Name       = "${var.project_name}-db"
+    Project    = var.project_name
+    CostCenter = "black-friday-survival"
+    Tier       = "database"
   }
 }

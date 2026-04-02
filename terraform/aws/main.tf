@@ -21,6 +21,8 @@ module "ec2" {
   subnet_id         = module.vpc.public_subnet_ids[0]
   security_group_id = module.security.ec2_sg_id
   key_name          = var.key_name
+  use_spot          = var.use_spot_instance
+  environment       = var.environment
 }
 
 module "rds" {
@@ -67,4 +69,40 @@ module "secrets" {
   source = "./modules/secrets"
 
   project_name = var.project_name
+}
+
+module "grafana" {
+  source = "./modules/grafana"
+
+  project_name      = var.project_name
+  ami_id            = var.ami_id
+  instance_type     = var.instance_type
+  subnet_id         = module.vpc.public_subnet_ids[0]
+  security_group_id = module.security.grafana_sg_id
+  key_name          = var.key_name
+  aws_region        = var.aws_region
+  admin_password    = var.grafana_admin_password
+}
+
+# -------------------------------------------------------
+# Module FinOps — Budget, alertes et optimisation coûts
+# -------------------------------------------------------
+module "finops" {
+  source = "./modules/finops"
+
+  project_name             = var.project_name
+  aws_region               = var.aws_region
+  alert_email              = var.finops_alert_email
+  budget_currency          = var.budget_currency
+  monthly_budget_amount    = var.monthly_budget_amount
+  project_start_date       = var.project_start_date
+  week1_budget_amount      = var.week1_budget_amount
+  week2_budget_amount      = var.week2_budget_amount
+  week3_budget_amount      = var.week3_budget_amount
+  daily_demo_budget_amount = var.daily_demo_budget_amount
+  enable_anomaly_detection = var.enable_anomaly_detection
+  anomaly_threshold_amount = var.anomaly_threshold_amount
+  ec2_instance_id          = module.ec2.instance_id
+  rds_instance_id          = module.rds.instance_id
+  alb_arn_suffix           = module.alb.alb_arn_suffix
 }
