@@ -6,7 +6,9 @@ resource "aws_lb" "main" {
   subnets            = var.subnet_ids
 
   tags = {
-    Name = "${var.project_name}-alb"
+    Name       = "${var.project_name}-alb"
+    Project    = var.project_name
+    CostCenter = var.project_name
   }
 }
 

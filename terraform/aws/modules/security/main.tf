@@ -98,6 +98,7 @@ resource "aws_security_group" "grafana" {
   tags = { Name = "${var.project_name}-grafana-sg" }
 }
 
+
 # Security group for the database EC2 instance
 resource "aws_security_group" "rds" {
   name        = "${var.project_name}-db-sg"
