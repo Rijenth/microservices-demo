@@ -68,3 +68,16 @@ module "secrets" {
 
   project_name = var.project_name
 }
+
+module "grafana" {
+  source = "./modules/grafana"
+
+  project_name      = var.project_name
+  ami_id            = var.ami_id
+  instance_type     = var.instance_type
+  subnet_id         = module.vpc.public_subnet_ids[0]
+  security_group_id = module.security.grafana_sg_id
+  key_name          = var.key_name
+  aws_region        = var.aws_region
+  admin_password    = var.grafana_admin_password
+}

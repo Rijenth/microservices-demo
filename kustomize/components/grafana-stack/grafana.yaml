@@ -1,0 +1,427 @@
+---
+# Grafana – visualization, alerting, trace/log/metric correlation
+# Datasources: Prometheus, Loki, Tempo (with trace↔log correlation)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        uid: prometheus
+        url: http://prometheus:9090
+        access: proxy
+        isDefault: true
+        jsonData:
+          httpMethod: POST
+          exemplarTraceIdDestinations:
+            - name: traceID
+              datasourceUid: tempo
+
+      - name: Loki
+        type: loki
+        uid: loki
+        url: http://loki:3100
+        access: proxy
+        jsonData:
+          derivedFields:
+            - name: TraceID
+              matcherRegex: '"traceId":"(\w+)"'
+              url: '$${__value.raw}'
+              datasourceUid: tempo
+
+      - name: Tempo
+        type: tempo
+        uid: tempo
+        url: http://tempo:3200
+        access: proxy
+        jsonData:
+          httpMethod: GET
+          tracesToLogs:
+            datasourceUid: loki
+            filterByTraceID: true
+            filterBySpanID: false
+            mapTagNamesEnabled: true
+            mappedTags:
+              - key: service.name
+                value: app
+          tracesToMetrics:
+            datasourceUid: prometheus
+            queries:
+              - name: Request rate
+                query: sum(rate(http_server_request_duration_seconds_count{$$__tags}[5m]))
+          serviceMap:
+            datasourceUid: prometheus
+          nodeGraph:
+            enabled: true
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards-provisioning
+data:
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+      - name: default
+        orgId: 1
+        folder: OnlineBoutique
+        type: file
+        disableDeletion: false
+        updateIntervalSeconds: 30
+        options:
+          path: /var/lib/grafana/dashboards
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-boutique
+data:
+  online-boutique.json: |
+    {
+      "title": "Online Boutique – Overview",
+      "uid": "online-boutique",
+      "schemaVersion": 38,
+      "refresh": "30s",
+      "time": {"from": "now-1h", "to": "now"},
+      "panels": [
+        {
+          "id": 1,
+          "title": "Request Rate (req/s)",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+          "datasource": {"uid": "prometheus"},
+          "targets": [{
+            "expr": "sum by (service) (rate(traces_spanmetrics_calls_total[5m]))",
+            "legendFormat": "{{service}}"
+          }]
+        },
+        {
+          "id": 2,
+          "title": "Error Rate (%)",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+          "datasource": {"uid": "prometheus"},
+          "targets": [{
+            "expr": "100 * sum by (service) (rate(traces_spanmetrics_calls_total{status_code=\"STATUS_CODE_ERROR\"}[5m])) / sum by (service) (rate(traces_spanmetrics_calls_total[5m]))",
+            "legendFormat": "{{service}}"
+          }],
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "steps": [
+                  {"color": "green", "value": null},
+                  {"color": "yellow", "value": 1},
+                  {"color": "red", "value": 5}
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": 3,
+          "title": "Latency p99 (seconds)",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+          "datasource": {"uid": "prometheus"},
+          "targets": [{
+            "expr": "histogram_quantile(0.99, sum by (le, service) (rate(traces_spanmetrics_latency_bucket[5m])))",
+            "legendFormat": "p99 {{service}}"
+          }]
+        },
+        {
+          "id": 4,
+          "title": "Latency p50 (seconds)",
+          "type": "timeseries",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+          "datasource": {"uid": "prometheus"},
+          "targets": [{
+            "expr": "histogram_quantile(0.50, sum by (le, service) (rate(traces_spanmetrics_latency_bucket[5m])))",
+            "legendFormat": "p50 {{service}}"
+          }]
+        },
+        {
+          "id": 5,
+          "title": "Logs – All Services",
+          "type": "logs",
+          "gridPos": {"h": 10, "w": 24, "x": 0, "y": 16},
+          "datasource": {"uid": "loki"},
+          "targets": [{
+            "expr": "{namespace=\"default\"} |= ``",
+            "legendFormat": ""
+          }],
+          "options": {
+            "showLabels": true,
+            "showTime": true,
+            "sortOrder": "Descending",
+            "wrapLogMessage": false,
+            "enableLogDetails": true
+          }
+        },
+        {
+          "id": 6,
+          "title": "Traces – Search",
+          "type": "traces",
+          "gridPos": {"h": 10, "w": 24, "x": 0, "y": 26},
+          "datasource": {"uid": "tempo"},
+          "targets": [{
+            "queryType": "traceql",
+            "query": "{}"
+          }]
+        }
+      ]
+    }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-alert-rules
+data:
+  alert-rules.yaml: |
+    apiVersion: 1
+    groups:
+      - orgId: 1
+        name: OnlineBoutique
+        folder: OnlineBoutique
+        interval: 1m
+        rules:
+          - uid: boutique-high-error-rate
+            title: "High Error Rate"
+            condition: B
+            for: 5m
+            labels:
+              severity: critical
+              team: backend
+            annotations:
+              summary: "High error rate detected"
+              description: "Error rate exceeds 5% for 5 minutes."
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 600
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: >
+                    sum(rate(http_server_request_duration_seconds_count{http_response_status_code=~"5.."}[5m]))
+                    /
+                    sum(rate(http_server_request_duration_seconds_count[5m]))
+                  instant: false
+                  intervalMs: 1000
+                  maxDataPoints: 43200
+                  refId: A
+              - refId: B
+                relativeTimeRange:
+                  from: 600
+                  to: 0
+                datasourceUid: "__expr__"
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0.05]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                  datasource:
+                    type: __expr__
+                    uid: "__expr__"
+                  expression: A
+                  refId: B
+                  type: threshold
+
+          - uid: boutique-high-latency
+            title: "High p99 Latency"
+            condition: B
+            for: 5m
+            labels:
+              severity: warning
+              team: backend
+            annotations:
+              summary: "High p99 latency detected"
+              description: "p99 latency exceeds 2 seconds for 5 minutes."
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 600
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: >
+                    histogram_quantile(0.99,
+                      sum(rate(http_server_request_duration_seconds_bucket[5m])) by (le)
+                    )
+                  instant: false
+                  intervalMs: 1000
+                  maxDataPoints: 43200
+                  refId: A
+              - refId: B
+                relativeTimeRange:
+                  from: 600
+                  to: 0
+                datasourceUid: "__expr__"
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [2]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                  datasource:
+                    type: __expr__
+                    uid: "__expr__"
+                  expression: A
+                  refId: B
+                  type: threshold
+
+          - uid: boutique-collector-down
+            title: "OTel Collector Down"
+            condition: B
+            for: 2m
+            labels:
+              severity: critical
+              team: ops
+            annotations:
+              summary: "OpenTelemetry Collector is unreachable"
+              description: "Metrics and traces collection has stopped."
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  expr: "absent(up{job=\"otel-collector\"})"
+                  instant: false
+                  intervalMs: 1000
+                  maxDataPoints: 43200
+                  refId: A
+              - refId: B
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: "__expr__"
+                model:
+                  conditions:
+                    - evaluator:
+                        params: [0]
+                        type: gt
+                      operator:
+                        type: and
+                      query:
+                        params: [A]
+                      reducer:
+                        params: []
+                        type: last
+                      type: query
+                  datasource:
+                    type: __expr__
+                    uid: "__expr__"
+                  expression: A
+                  refId: B
+                  type: threshold
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      securityContext:
+        fsGroup: 472
+        runAsGroup: 472
+        runAsNonRoot: true
+        runAsUser: 472
+      containers:
+      - name: grafana
+        image: grafana/grafana:11.2.0
+        ports:
+        - name: http
+          containerPort: 3000
+        env:
+        - name: GF_AUTH_ANONYMOUS_ENABLED
+          value: "true"
+        - name: GF_AUTH_ANONYMOUS_ORG_ROLE
+          value: "Viewer"
+        - name: GF_AUTH_DISABLE_LOGIN_FORM
+          value: "false"
+        - name: GF_SECURITY_ADMIN_PASSWORD
+          value: "admin"
+        - name: GF_FEATURE_TOGGLES_ENABLE
+          value: "traceqlEditor traceToMetrics"
+        - name: GF_PATHS_PROVISIONING
+          value: "/etc/grafana/provisioning"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        volumeMounts:
+        - name: datasources
+          mountPath: /etc/grafana/provisioning/datasources
+        - name: dashboards-provisioning
+          mountPath: /etc/grafana/provisioning/dashboards
+        - name: dashboard-boutique
+          mountPath: /var/lib/grafana/dashboards
+        - name: alert-rules
+          mountPath: /etc/grafana/provisioning/alerting
+        - name: storage
+          mountPath: /var/lib/grafana
+      volumes:
+      - name: datasources
+        configMap:
+          name: grafana-datasources
+      - name: dashboards-provisioning
+        configMap:
+          name: grafana-dashboards-provisioning
+      - name: dashboard-boutique
+        configMap:
+          name: grafana-dashboard-boutique
+      - name: alert-rules
+        configMap:
+          name: grafana-alert-rules
+      - name: storage
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+spec:
+  selector:
+    app: grafana
+  ports:
+  - name: http
+    port: 3000
+    targetPort: 3000
+  type: ClusterIP

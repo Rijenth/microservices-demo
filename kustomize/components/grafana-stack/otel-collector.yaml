@@ -1,0 +1,123 @@
+---
+# OpenTelemetry Collector – Grafana Stack edition
+# Replaces google-cloud-operations collector.
+# Traces  → Tempo (OTLP gRPC)
+# Metrics → Prometheus (scraped via /metrics on :8889)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-otel-collector-config
+data:
+  collector-config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+
+    processors:
+      batch:
+        timeout: 5s
+      memory_limiter:
+        check_interval: 1s
+        limit_mib: 400
+
+    exporters:
+      otlp/tempo:
+        endpoint: tempo:4317
+        tls:
+          insecure: true
+      prometheus:
+        endpoint: "0.0.0.0:8889"
+        resource_to_telemetry_conversion:
+          enabled: true
+
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, batch]
+          exporters: [otlp/tempo]
+        metrics:
+          receivers: [otlp]
+          processors: [memory_limiter, batch]
+          exporters: [prometheus]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opentelemetrycollector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: opentelemetrycollector
+  template:
+    metadata:
+      labels:
+        app: opentelemetrycollector
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8889"
+        prometheus.io/path: "/metrics"
+    spec:
+      securityContext:
+        fsGroup: 1000
+        runAsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+      - name: otel-gateway
+        image: otel/opentelemetry-collector-contrib:0.144.0
+        args:
+        - --config=/conf/collector-config.yaml
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
+          readOnlyRootFilesystem: true
+        ports:
+        - name: grpc-otlp
+          containerPort: 4317
+        - name: http-otlp
+          containerPort: 4318
+        - name: prometheus
+          containerPort: 8889
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        volumeMounts:
+        - name: config
+          mountPath: /conf
+      volumes:
+      - name: config
+        configMap:
+          name: grafana-otel-collector-config
+          items:
+          - key: collector-config.yaml
+            path: collector-config.yaml
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: opentelemetrycollector
+spec:
+  selector:
+    app: opentelemetrycollector
+  ports:
+  - name: grpc-otlp
+    port: 4317
+    targetPort: 4317
+  - name: http-otlp
+    port: 4318
+    targetPort: 4318
+  - name: prometheus
+    port: 8889
+    targetPort: 8889
+  type: ClusterIP

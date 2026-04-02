@@ -65,3 +65,10 @@ variable "eks_oidc_issuer_url" {
   description = "OIDC issuer URL from EKS cluster (empty to skip IRSA setup)"
   default     = ""
 }
+
+variable "grafana_admin_password" {
+  type        = string
+  description = "Grafana admin password"
+  sensitive   = true
+  default     = "admin"
+}

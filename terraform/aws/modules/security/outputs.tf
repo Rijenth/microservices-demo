@@ -12,3 +12,8 @@ output "rds_sg_id" {
   description = "ID of the RDS security group"
   value       = aws_security_group.rds.id
 }
+
+output "grafana_sg_id" {
+  description = "ID of the Grafana security group"
+  value       = aws_security_group.grafana.id
+}
