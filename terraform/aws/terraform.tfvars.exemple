@@ -7,3 +7,23 @@ instance_type  = "t3.micro" # Attention à la région, le type d'instance peux n
 key_name       = "your-ssh-key-pair-name" # Nom de la paire clé (pas la public key)
 db_username    = "admin"
 db_password    = "your-secure-password"
+
+finops_alert_email = "votre-email@hetic.net"
+
+budget_currency = "USD"
+
+monthly_budget_amount = 2200
+
+project_start_date = "2026-04-07T00:00:00Z"
+
+week1_budget_amount = 220  # Semaine 1 — Setup & Fondations
+week2_budget_amount = 550  # Semaine 2 — Hardening
+week3_budget_amount = 660  # Semaine 3 — Pre-Black Friday
+
+daily_demo_budget_amount = 110
+
+anomaly_threshold_amount = 50
+
+use_spot_instance = false
+
+environment = "dev"

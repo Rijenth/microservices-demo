@@ -28,3 +28,15 @@ variable "key_name" {
   type        = string
   description = "Name of the SSH key pair"
 }
+
+variable "use_spot" {
+  type        = bool
+  description = "Enable Spot Instance pricing for cost savings (up to 70% cheaper, but interruptible)"
+  default     = false
+}
+
+variable "environment" {
+  type        = string
+  description = "Deployment environment tag (dev / staging / prod)"
+  default     = "dev"
+}
